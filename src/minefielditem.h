@@ -155,6 +155,8 @@ private:
     // overload
     bool onItemRevealed(CellItem* item);
 
+    void markItem(CellItem* item);
+
     // note: in member functions use itemAt (see above )
     // instead of hand-computing index from row & col!
     // => not depend on how m_cells is represented

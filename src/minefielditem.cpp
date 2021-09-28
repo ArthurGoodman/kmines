@@ -26,17 +26,7 @@ MineFieldItem::MineFieldItem(KGameRenderer* renderer)
 
 void MineFieldItem::resetMines()
 {
-    m_gameOver = false;
-    m_numUnrevealed = m_numRows*m_numCols;
-
-    for(CellItem* item : std::as_const(m_cells)) {
-        item->unreveal();
-        item->unflag();
-        item->unexplode();
-    }
-
-    m_flaggedMinesCount = 0;
-    Q_EMIT flaggedMinesCountChanged(m_flaggedMinesCount);
+    initField(m_numRows, m_numCols, m_minesCount);
 }
 
 
@@ -340,6 +330,11 @@ void MineFieldItem::mousePressEvent( QGraphicsSceneMouseEvent *ev )
         return;
     }
 
+    if(ev->button() == Qt::RightButton && (ev->buttons() & Qt::LeftButton) == false)
+    {
+        markItem(itemUnderMouse);
+    }
+
     bool useFastExplore = Settings::exploreWithLeftClickOnNumberCells();
     m_emulatingMidButton = ( useFastExplore ? ( (ev->buttons() & Qt::LeftButton) && ( itemUnderMouse->isRevealed() ) ) : ( (ev->buttons() & Qt::LeftButton) && (ev->buttons() & Qt::RightButton) ) );
     bool midButtonPressed = (ev->button() == Qt::MiddleButton || m_emulatingMidButton );
@@ -351,12 +346,31 @@ void MineFieldItem::mousePressEvent( QGraphicsSceneMouseEvent *ev )
         itemUnderMouse->undoPress();
 
         const QList<CellItem*> neighbours = adjacentItemsFor(row,col);
-        for (CellItem* item : neighbours) {
-            if(!item->isFlagged() && !item->isQuestioned() && !item->isRevealed())
-                item->press();
-            m_midButtonPos = qMakePair(row,col);
-
-            m_leftButtonPos = qMakePair(-1,-1); // reset it
+        int numUnrevealed = 0;
+        int numMines = 0;
+        for (CellItem *item : neighbours) {
+            if(item->hasMine())
+                numMines++;
+            if(!item->isRevealed())
+                numUnrevealed++;
+        }
+        if (numUnrevealed == numMines)
+        {
+            for (CellItem *item : neighbours) {
+                if(!item->isRevealed() && !item->isFlagged())
+                {
+                    markItem(item);
+                }
+            }
+        }
+        else
+        {
+            for (CellItem* item : neighbours) {
+                if(!item->isFlagged() && !item->isQuestioned() && !item->isRevealed())
+                    item->press();
+                m_midButtonPos = qMakePair(row,col);
+                m_leftButtonPos = qMakePair(-1,-1); // reset it
+            }
         }
     }
     else if(ev->button() == Qt::LeftButton)
@@ -474,22 +488,6 @@ void MineFieldItem::mouseReleaseEvent( QGraphicsSceneMouseEvent * ev)
                 onItemRevealed(row,col);
         }
         m_leftButtonPos = qMakePair(-1,-1);//reset
-    }
-    else if(ev->button() == Qt::RightButton && (ev->buttons() & Qt::LeftButton) == false)
-    {
-        bool wasFlagged = itemUnderMouse->isFlagged();
-
-        itemUnderMouse->mark();
-
-        bool flagStateChanged = (itemUnderMouse->isFlagged() != wasFlagged);
-        if(flagStateChanged)
-        {
-            if(itemUnderMouse->isFlagged())
-                m_flaggedMinesCount++;
-            else
-                m_flaggedMinesCount--;
-            Q_EMIT flaggedMinesCountChanged(m_flaggedMinesCount);
-        }
     }
 }
 
@@ -634,6 +632,19 @@ QList<CellItem*> MineFieldItem::adjacentItemsFor(int row, int col)
     return resultingList;
 }
 
+void MineFieldItem::markItem(CellItem* item)
+{
+    bool wasFlagged = item->isFlagged();
 
+    item->mark();
 
-
+    bool flagStateChanged = (item->isFlagged() != wasFlagged);
+    if(flagStateChanged)
+    {
+        if(item->isFlagged())
+            m_flaggedMinesCount++;
+        else
+            m_flaggedMinesCount--;
+        Q_EMIT flaggedMinesCountChanged(m_flaggedMinesCount);
+    }
+}
